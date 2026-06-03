@@ -16,7 +16,7 @@ ajv-formats' regex (file `dist/formats.js`, version 3.0.1) is:
 
 The `(?:urn:uuid:)?` group makes the prefix optional. Combined with the `/i` flag, it also accepts `URN:UUID:` and `urn:uuid:` (any case). The spec is explicit that the `uuid` format does not cover URN-wrapped UUIDs.
 
-python-jsonschema 4.25.1 correctly rejects all three variants because its position check `all(instance[p] == "-" for p in (8, 13, 18, 23))` operates on the original string - when the prefix is present, position 8 is `:` not `-`.
+python-jsonschema 4.25.1 correctly rejects all three variants. The two-phase check: first `uuid.UUID(instance)` is called, which internally does `hex.replace('urn:', '').replace('uuid:', '').strip('{}').replace('-', '')` - so it accepts the prefix. But then the position check `all(instance[p] == "-" for p in (8, 13, 18, 23))` runs on the **original** string. With the `urn:uuid:` prefix present, position 8 holds `:` not `-`, so the check fails and the instance is rejected. The prefix tricks the constructor but not the position check.
 
 | input | oracle | python-jsonschema 4.25.1 | ajv-formats 3.0.1 |
 |---|---|---|---|
