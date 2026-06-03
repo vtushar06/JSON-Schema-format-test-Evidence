@@ -21,5 +21,6 @@ Verdicts follow the RFC the JSON Schema spec references for each format (for `ip
 
 ## Files
 
-- `ipv4.md` IPv4 dotted-quad findings.
+- [`ipv4.md`](./ipv4.md) IPv4 dotted-quad findings (inet_aton shorthand, NUL injection, non-ASCII digits, leading-zero ambiguity).
+- [`uuid.md`](./uuid.md) UUID findings (URN prefix accepted by ajv-formats, trailing-hyphen and non-ASCII digit accepted by python-jsonschema).
 - More formats added as the work proceeds.

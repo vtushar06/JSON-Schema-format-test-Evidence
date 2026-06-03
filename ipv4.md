@@ -108,6 +108,48 @@ The nine local validators reject every non-ASCII digit. Two parsers checked sepa
 
 No single non-ASCII script is accepted by both. For example `१९२.168.0.1` (Devanagari) is accepted by Guava but rejected by the WHATWG parser and by every strict validator. This is a homograph surface.
 
+### Two inputs that expose the real-world split
+
+These are the exact strings that motivated the JSON Schema Test Suite addition. All verified live against installed implementations.
+
+| input | WHATWG URL (Node 20) | Java Guava 33.3.1 | ajv-formats 3.0.1 |
+|---|---|---|---|
+| `１９２.１６８.１.１` (fullwidth digits) | accept - resolves to 192.168.1.1 | accept - resolves to 192.168.1.1 | reject |
+| `𝟏𝟗𝟐.𝟏𝟔𝟖.𝟏.𝟏` (mathematical-bold, astral-plane) | accept - resolves to 192.168.1.1 | reject | reject |
+
+The fullwidth case is accepted by both a Unicode-aware Java library (Guava, via `Character.digit`) and a browser-spec URL parser (Node's `new URL()`). The mathematical-bold case (astral-plane, surrogate pair in UTF-16) slips past Guava's `charAt` check but is still folded by the WHATWG UTS-46 mapping. ajv-formats rejects both because its regex `[0-9.]` is ASCII-only.
+
+The risk: an application that format-validates with ajv-formats and then resolves the host with `new URL(input).hostname` for an allowlist check sees two different strings.
+
+Reproduce the WHATWG case (Node 20):
+
+```bash
+node -e "console.log(new URL('http://１９２.１６８.１.１/').hostname)"
+# 192.168.1.1
+node -e "console.log(new URL('http://𝟏𝟗𝟐.𝟏𝟔𝟖.𝟏.𝟏/').hostname)"
+# 192.168.1.1
+```
+
+Reproduce the Guava case (Java 21 `jshell`, with a Guava jar on the class path - point `--class-path` at your local `guava-*.jar`):
+
+```bash
+# fullwidth - accepted, returns /192.168.1.1
+echo 'System.out.println(com.google.common.net.InetAddresses.forString("１９２.１６８.１.１"))' \
+  | jshell --class-path guava-33.3.1-jre.jar -q
+
+# mathematical-bold - rejected, throws IllegalArgumentException
+echo 'System.out.println(com.google.common.net.InetAddresses.forString("𝟏𝟗𝟐.𝟏𝟔𝟖.𝟏.𝟏"))' \
+  | jshell --class-path guava-33.3.1-jre.jar -q
+```
+
+Reproduce ajv-formats rejection:
+
+```bash
+node -e "const f=require('ajv-formats/dist/formats').fullFormats;
+console.log(f.ipv4.test('１９２.１６８.１.１'));  // false
+console.log(f.ipv4.test('𝟏𝟗𝟐.𝟏𝟔𝟖.𝟏.𝟏'));  // false"
+```
+
 ## Same string, two different addresses
 
 `0177.0.0.1` is read as `127.0.0.1` by parsers that treat a leading `0` as octal (inet_aton, browsers), but as `177.0.0.1` by parsers that ignore the leading zero. A filter that classifies `177.x.x.x` as public while the OS connects to `127.0.0.1` is the basis of CVE-2021-28918.
